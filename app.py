@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import pandas as pd
 import shutil
 
 
@@ -9,113 +10,294 @@ from modules.pdf_generator import create_worker_pdf
 
 
 
+# -----------------------------
+# PATH CONFIG
+# -----------------------------
+
 BASE_PATH = os.getcwd()
 
 
+INVENTORY_UPLOAD_PATH = os.path.join(
+    BASE_PATH,
+    "input",
+    "inventory",
+    "Inventory.pdf"
+)
+
+
+INVENTORY_EXCEL_PATH = os.path.join(
+    BASE_PATH,
+    "database",
+    "inventory.xlsx"
+)
+
+
+REPORT_PATH = os.path.join(
+    BASE_PATH,
+    "output",
+    "Final_Color_Report.xlsx"
+)
+
+
+
+# -----------------------------
+# PAGE CONFIG
+# -----------------------------
+
 st.set_page_config(
-    page_title="Dyeing AI System",
+    page_title="Bajaj Thread AI",
+    page_icon="🧵",
     layout="wide"
 )
 
 
-st.title("🧵 Dyeing AI Color Management System")
+
+# -----------------------------
+# HEADER
+# -----------------------------
+
+st.title(
+    "🧵 Bajaj Thread Color Matching AI"
+)
 
 
 st.write(
 """
 Upload today's Inventory PDF.
-System automatically checks Design colors,
-finds available colors,
-uses alternatives,
-and generates worker instruction PDF.
+System will automatically check:
+
+✔ Available Colors  
+✔ Alternative Colors  
+✔ Missing Colors  
+
+and generate Worker Instruction PDF.
 """
 )
 
 
 
-inventory_upload = st.file_uploader(
+st.divider()
+
+
+
+# -----------------------------
+# FILE UPLOAD
+# -----------------------------
+
+inventory_file = st.file_uploader(
     "Upload Inventory PDF",
     type=["pdf"]
 )
 
 
 
-if inventory_upload:
+if inventory_file:
 
 
-    inventory_path = (
-        BASE_PATH+
-        "/input/inventory/Inventory.pdf"
-    )
+    # Save uploaded PDF
 
+    with open(
+        INVENTORY_UPLOAD_PATH,
+        "wb"
+    ) as f:
 
-    with open(inventory_path,"wb") as f:
         f.write(
-            inventory_upload.getbuffer()
+            inventory_file.getbuffer()
         )
 
 
     st.success(
-        "Inventory Uploaded Successfully"
+        "Inventory PDF Uploaded"
     )
 
 
 
+    # -----------------------------
+    # PROCESS BUTTON
+    # -----------------------------
+
     if st.button(
-        "Generate Worker PDF"
+        "🚀 Generate Worker Instruction PDF"
     ):
 
 
         with st.spinner(
-            "Processing..."
+            "Processing Inventory..."
         ):
 
 
-            # Step 1
+            # STEP 1
+            # PDF -> Excel
+
+
             inventory_df = extract_inventory(
-                inventory_path
+                INVENTORY_UPLOAD_PATH
             )
 
 
             inventory_df.to_excel(
-                BASE_PATH+
-                "/database/inventory.xlsx",
+                INVENTORY_EXCEL_PATH,
                 index=False
             )
 
 
 
-            # Step 2
+            # STEP 2
+            # Matching
+
+
             final_df = run_matching()
 
 
 
             final_df.to_excel(
-                BASE_PATH+
-                "/output/Final_Color_Report.xlsx",
+                REPORT_PATH,
                 index=False
             )
 
 
 
-            # Step 3 PDF
+            # STEP 3
+            # Worker PDF
 
-            pdf_path=create_worker_pdf(
+
+            pdf_path = create_worker_pdf(
                 final_df
             )
 
 
+
         st.success(
-            "Completed Successfully"
+            "Completed Successfully 🎉"
         )
 
 
-        st.download_button(
-            label="Download Worker PDF",
-            data=open(
-                pdf_path,
-                "rb"
-            ),
-            file_name=
-            "Worker_Color_Instructions.pdf"
+
+        st.divider()
+
+
+
+        # -----------------------------
+        # SUMMARY
+        # -----------------------------
+
+
+        st.subheader(
+            "Report Summary"
         )
+
+
+        col1,col2,col3 = st.columns(3)
+
+
+
+        with col1:
+
+            st.metric(
+                "Total Colors",
+                len(final_df)
+            )
+
+
+        with col2:
+
+            available=len(
+                final_df[
+                    final_df.Status=="AVAILABLE"
+                ]
+            )
+
+
+            st.metric(
+                "Available",
+                available
+            )
+
+
+
+        with col3:
+
+
+            alternative=len(
+                final_df[
+                    final_df.Status=="ALTERNATIVE_USED"
+                ]
+            )
+
+
+            st.metric(
+                "Alternative Used",
+                alternative
+            )
+
+
+
+        missing=len(
+            final_df[
+                final_df.Status=="MISSING"
+            ]
+        )
+
+
+
+        st.warning(
+            f"Missing Colors : {missing}"
+        )
+
+
+
+        st.divider()
+
+
+
+        # -----------------------------
+        # DOWNLOAD BUTTONS
+        # -----------------------------
+
+
+        st.subheader(
+            "Download Files"
+        )
+
+
+        with open(
+            pdf_path,
+            "rb"
+        ) as file:
+
+
+            st.download_button(
+
+                label="📄 Download Worker PDF",
+
+                data=file,
+
+                file_name=
+                "Worker_Color_Instructions.pdf",
+
+                mime=
+                "application/pdf"
+
+            )
+
+
+
+        with open(
+            REPORT_PATH,
+            "rb"
+        ) as file:
+
+
+            st.download_button(
+
+                label="📊 Download Excel Report",
+
+                data=file,
+
+                file_name=
+                "Final_Color_Report.xlsx",
+
+                mime=
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+            )
